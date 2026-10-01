@@ -1,0 +1,61 @@
+{
+  "args": {
+    "tickers": [
+      "SPY",
+      "QQQ",
+      "IWM",
+      "XLF",
+      "XLE",
+      "XLK",
+      "XLV",
+      "XLI",
+      "TLT",
+      "GLD"
+    ],
+    "start": "2010-01-01",
+    "end": null,
+    "models": [
+      "ridge",
+      "gbm",
+      "mlp"
+    ],
+    "min_train": 756,
+    "step": 63,
+    "window": null,
+    "cost_bps": 2.0,
+    "target_vol": 0.1,
+    "max_leverage": 2.0,
+    "long_only": false,
+    "synthetic": "null",
+    "n_synthetic": 4,
+    "n_synthetic_days": 3000,
+    "ar_coef": 0.15,
+    "seed": 0,
+    "out": "results",
+    "refresh": false
+  },
+  "run_at": "2026-10-01T23:23:10",
+  "versions": {
+    "numpy": "2.5.3",
+    "pandas": "3.0.6",
+    "matplotlib": "3.11.2"
+  },
+  "data_ranges": {
+    "SYN0": [
+      "2012-01-02",
+      "2023-06-30"
+    ],
+    "SYN1": [
+      "2012-01-02",
+      "2023-06-30"
+    ],
+    "SYN2": [
+      "2012-01-02",
+      "2023-06-30"
+    ],
+    "SYN3": [
+      "2012-01-02",
+      "2023-06-30"
+    ]
+  }
+}
