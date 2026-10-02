@@ -43,41 +43,56 @@ prices ──► features (known at close of t) ──► walk-forward models �
 ## Quick start
 
 ```bash
-git clone https://github.com/saindustries/quant-signal-lab.git
+git clone https://github.com/SAIndustries/quant-signal-lab.git
 cd quant-signal-lab
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -e ".[dev]"
+python -m pip install -e ".[dev]"
 
-pytest -q                                   # 21 tests, a few seconds
-qsl --synthetic null                        # offline sanity check (no edge expected)
-qsl                                         # real data via Yahoo Finance (needs internet)
+python -m pytest -q                         # 21 tests, a few seconds
+python -m qsl.cli --synthetic null          # offline sanity check (no edge expected)
+python -m qsl.cli --out results/real        # real data via Yahoo Finance (needs internet)
 ```
 
-Useful options: `--tickers SPY AAPL`, `--models ridge gbm`, `--step 126` (faster), `--window 1260` (rolling instead of expanding), `--cost-bps 5`, `--long-only`. Run `qsl --help` for all of them. Outputs go to `results/`: `summary.md`, `portfolio.csv`, `per_asset.csv`, `cost_sensitivity.csv`, two PNG charts and `run_config.json` (arguments, library versions and data ranges for reproducibility).
+Requires Python 3.10+. The `qsl` command is installed as a shortcut for `python -m qsl.cli`.
+
+Useful options: `--tickers SPY AAPL`, `--models ridge gbm`, `--step 126` (faster), `--window 1260` (rolling instead of expanding), `--cost-bps 5`, `--long-only`. Run `python -m qsl.cli --help` for all of them. Outputs go to the folder given by `--out` (default `results/`): `summary.md`, `portfolio.csv`, `per_asset.csv`, `cost_sensitivity.csv`, two PNG charts and `run_config.json` (arguments, library versions and data ranges for reproducibility).
 
 ## Results
 
 ### 1. Real-market results
 
-> **TODO (fill in after your run):** run `qsl`, then paste the "Equal-weight portfolio" and "Net Sharpe vs. transaction cost" tables from `results/summary.md` here, embed `results/portfolio_equity.png`, and write 3-4 sentences on what you found. Report it plainly, including if no model beats the baseline after costs. That is a legitimate and common result and is more credible than an unexplained high number.
+Real-market results are not included yet. To generate them (about 10-15 minutes with the default settings, internet required):
+
+```bash
+python -m qsl.cli --out results/real
+```
+
+This writes `results/real/summary.md`, the portfolio and per-instrument tables, and the equity and cost-sensitivity charts. Read them against the baselines (`hist_mean`, `buy_and_hold`) and the confidence intervals, not the raw Sharpe alone.
 
 ### 2. Sanity checks on synthetic data (control experiments)
 
-These do **not** say anything about markets. They verify that the evaluation machinery tells the truth when the answer is known. Reproduce with `qsl --synthetic null` and `qsl --synthetic ar` (4 assets, ~8 years out-of-sample, 2 bps cost). Full outputs are in `results/synthetic_null/` and `results/synthetic_planted/`.
+These do **not** say anything about markets. They verify that the evaluation machinery tells the truth when the answer is known. Reproduce with `python -m qsl.cli --synthetic null --out results/synthetic_null` and `python -m qsl.cli --synthetic ar --out results/synthetic_planted` (4 assets, ~8 years out-of-sample, 2 bps cost, seed 0). Full outputs are in those two folders. Exact figures can vary slightly across library versions; each folder's `run_config.json` records the versions used.
 
 **Null control: random walks with volatility clustering, no predictable component.**
-No model should show an edge. None does: all three models have negative net Sharpe at 2 bps (ridge −0.66, gbm −0.44, mlp −0.65) and negative OOS R² versus the historical mean.
+No model should show an edge, and none does:
+
+- Net of 2 bps, the equal-weight Sharpe is negative for all three models (ridge −0.64, gbm −0.49, mlp −0.91). The MLP's 95% confidence interval lies entirely below zero (−1.58 to −0.24): a model trading noise does not merely break even, it pays costs.
+- Out-of-sample R² versus the historical mean is negative in all 12 model-asset combinations.
+- One of 12 rank-IC tests fell below 5% after multiple-testing adjustment (ridge on one asset), and its IC was negative, which is the wrong direction for a real edge and in line with what chance produces at that many tests.
+- The always-long baseline (`hist_mean`) shows a Sharpe of +0.30, but its confidence interval (−0.36 to 0.97) spans zero, so that is noise too.
 
 **Positive control: same data with planted lag-1 return autocorrelation of 0.15** (far stronger than in real markets, chosen so it is clearly detectable).
-The pipeline recovers it, and shows how costs erode it:
+The pipeline recovers it. Rank IC is positive for every model on every asset, and 11 of the 12 model-asset tests are significant at 5% after multiple-testing adjustment (the exception is the MLP on one asset). At 2 bps the equal-weight net Sharpe is 2.41 for ridge (95% CI 1.74 to 3.08), 1.52 for gbm and 1.28 for mlp, against 0.09 for buy-and-hold. The same signal is worth less as costs rise:
 
 | Net Sharpe vs. cost | 0 bps | 2 bps | 5 bps | 10 bps |
 |---|---|---|---|---|
-| ridge | 2.75 | 2.30 | 1.63 | 0.50 |
-| gbm | 2.18 | 1.75 | 1.10 | 0.03 |
-| mlp | 1.60 | 1.23 | 0.67 | −0.26 |
+| ridge | 2.86 | 2.41 | 1.72 | 0.59 |
+| gbm | 1.96 | 1.52 | 0.87 | −0.23 |
+| mlp | 1.65 | 1.28 | 0.73 | −0.18 |
 
-**Calibration of the significance tests** (`python scripts/null_calibration.py --runs 60`): on 60 independent random-walk series the IC and hit-rate tests reject at the 5% level in 6.7% of runs and at the 1% level in 1.7% of runs, in line with nominal rates (sampling error on 60 runs is about ±3 points at 5%).
+Two takeaways: the simplest model (ridge) extracts the planted signal best, and a strong gross edge can be mostly or entirely consumed by costs, which is why the backtest charges for turnover.
+
+**Calibration of the significance tests** (`python scripts/null_calibration.py --runs 60`; one run, ridge model): on 60 independent random-walk series the IC and hit-rate tests reject at the 5% level in 6.7% of runs and at the 1% level in 1.7% of runs, in line with nominal rates (sampling error on 60 runs is about ±3 points at 5%).
 
 ## Project layout
 
@@ -92,7 +107,7 @@ src/qsl/
   cli.py         Experiment runner and report writer
 tests/           21 tests: look-ahead, leakage, metrics, backtest logic, null/positive controls
 scripts/         Null-calibration experiment
-results/         Output of the synthetic control runs (your real run writes here too)
+results/         Synthetic control runs (synthetic_null/, synthetic_planted/); real-data runs go in results/real/
 ```
 
 ## Limitations (read before trusting any number)
@@ -111,3 +126,6 @@ results/         Output of the synthetic control runs (your real run writes here
 - Add a deflated Sharpe ratio or a stationary bootstrap for dependence-robust confidence intervals.
 - Extend to multi-day horizons (raise `embargo` to at least the horizon).
 
+## License
+
+MIT. See `LICENSE`.
