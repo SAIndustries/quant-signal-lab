@@ -1,4 +1,4 @@
-# quant-signal-lab
+# Quant Signal Lab
 
 **Leakage-safe walk-forward evaluation and cost-aware backtesting of return-prediction models.**
 
@@ -61,13 +61,38 @@ Useful options: `--tickers SPY AAPL`, `--models ridge gbm`, `--step 126` (faster
 
 ### 1. Real-market results
 
-Real-market results are not included yet. To generate them (about 10-15 minutes with the default settings, internet required):
+Data: daily adjusted prices from Yahoo Finance for `SPY QQQ IWM XLF XLE XLK XLV XLI TLT GLD`. Out-of-sample window 2013-04-08 to 2026-10-01 (about 3,450 trading days per instrument; the first three years are used only for training), 2 bps one-way cost, 10% per-instrument volatility target, models refit every 63 days on an expanding window. Command: `python -m qsl.cli --out results/real`. Full tables are in `results/real/summary.md`.
 
-```bash
-python -m qsl.cli --out results/real
-```
+![Equal-weight portfolio, out-of-sample](results/real/portfolio_equity.png)
 
-This writes `results/real/summary.md`, the portfolio and per-instrument tables, and the equity and cost-sensitivity charts. Read them against the baselines (`hist_mean`, `buy_and_hold`) and the confidence intervals, not the raw Sharpe alone.
+**Equal-weight portfolio of the 10 instruments, net of costs**
+
+| Model | Ann. return | Ann. vol | Net Sharpe | 95% CI | Max drawdown | Avg. daily turnover |
+|---|---|---|---|---|---|---|
+| hist_mean (always long, vol-targeted) | 6.5% | 7.0% | 0.93 | 0.39 to 1.46 | −10.2% | 0.024 |
+| ridge | −0.6% | 5.9% | −0.07 | −0.60 to 0.47 | −18.3% | 0.346 |
+| gbm | 0.6% | 4.7% | 0.15 | −0.39 to 0.68 | −15.0% | 0.359 |
+| mlp | −0.6% | 5.0% | −0.10 | −0.64 to 0.43 | −16.4% | 0.407 |
+| buy_and_hold (unlevered) | 12.8% | 14.2% | 0.92 | 0.38 to 1.45 | −30.6% | n/a |
+
+**Net Sharpe versus transaction cost**
+
+| One-way cost | hist_mean | ridge | gbm | mlp |
+|---|---|---|---|---|
+| 0 bps | 0.94 | 0.23 | 0.53 | 0.31 |
+| 1 bps | 0.94 | 0.08 | 0.34 | 0.11 |
+| 2 bps | 0.93 | −0.07 | 0.15 | −0.10 |
+| 5 bps | 0.90 | −0.51 | −0.43 | −0.72 |
+| 10 bps | 0.86 | −1.25 | −1.39 | −1.74 |
+
+**Findings**
+
+- **No model has a detectable edge.** None beats the always-long, volatility-targeted baseline, even before costs (gross Sharpe 0.23 to 0.53 against 0.94). Every model's 95% confidence interval includes zero, and the intervals overlap heavily, so the differences between the three models are not meaningful.
+- **The predictive tests agree.** Across the 30 model-instrument combinations, rank ICs lie between −0.028 and 0.045, and the smallest Benjamini-Hochberg-adjusted p-value is 0.27. Hit rates (0.49 to 0.53) are mostly at or below the share of up days, and none is significant (smallest adjusted p-value 0.59). Out-of-sample R² versus the historical mean is zero or slightly negative almost everywhere.
+- **Costs consume what little signal exists.** The models trade 35 to 40% of capital per day, against 2% for the baseline; their net Sharpe turns negative at roughly 1.5 to 3 bps.
+- **Volatility targeting is the one clear effect.** The always-long baseline matches buy-and-hold's Sharpe (0.93 against 0.92) with a maximum drawdown of −10% instead of −31%, at roughly half the annual return because it takes roughly half the risk. This is risk management, not alpha.
+
+**What this does not show.** It does not show that markets are unpredictable. It shows that these three simple models, with fixed hyperparameters, price-and-volume features at daily frequency and a universe of liquid ETFs, found nothing detectable. With about 3,450 observations per instrument, effects below an IC of roughly 0.03 to 0.04 cannot be distinguished from zero. The sample period (2013 to 2026) was also strong for equities, which flatters the buy-and-hold and always-long Sharpe ratios.
 
 ### 2. Sanity checks on synthetic data (control experiments)
 
